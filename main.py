@@ -141,9 +141,9 @@ class BaseStation:
                     tmp = i
                     if D_n[i][j] == 0:
                         D_n[i][j] = D_n[i][j - 1] + P[i][j] * V_n
-                        tmp += 1
+                        tmp = (tmp + 1) % self.abonents
                         while D_n[tmp][j] == 0 and tmp != i:  # если нет информации в буфере, которую нужно отправить.
-                            tmp = (tmp + 1) % self.abonents.size()  # Доходим до человека, у которого есть данные.
+                            tmp = (tmp + 1) % self.abonents  # Доходим до человека, у которого есть данные.
                             D_n[tmp][j] = D_n[tmp][j - 1] + P[tmp][j] * V_n
                     SNR = self.getSNR(self.d[tmp],del_f)  # вычисляем SNR для пользователя которому на этом слоте  БС должен передавать информацию
                     C = del_f * math.log2(1 + SNR)  # вычисляем скорость передачи
