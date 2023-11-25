@@ -18,15 +18,15 @@ class BaseStation:
         for i in range(n):
             self.d[i] = math.sqrt(random.random() * R * R)
         dist = {i: self.d[i] for i in range(n)}
-        print(dist)
+        #print(dist)
         # сортируем словарь по значению дистанции, чтобы потом иметь возможность к нему обратиться
         sorted_dict = sorted(dist.items(), key=lambda item: item[1])
-        print(sorted_dict)
+        #print(sorted_dict)
         #    self.SNR[i] = self.getSNR(self.d[i], del_f)
         #    #print(self.SNR[i])
 
     def alpha(self, h: float, f_0: float) -> float:
-        return (1.1 * math.log10(f_0) - 0.7) * h - 1.56 * math.log10(f_0) - 0.8  # возможно f_0 это не тоже самое, что del_f
+        return (1.1 * math.log10(f_0) - 0.7) * h - 1.56 * math.log10(f_0) + 0.8  # возможно f_0 это не тоже самое, что del_f
 
     def getSNR(self, d: float, del_f: float) -> float:  # НЕ ЗАБЫТЬ ПРОВЕРИТЬ ЕДИНИЦЫ РАЗМЕРНОСТИ
         T = 300  # температура в Кельвинах
@@ -34,8 +34,8 @@ class BaseStation:
         k_n = 2  # коэф шума приемника
 
         P_n = del_f * T * k * k_n  # Мощность шумов
-
-        P_tx = 1  # ВОЗМОЖНО ТУТ 10**6
+        #print(f'P_n = {P_n}')
+        P_tx = 160  # ВОЗМОЖНО ТУТ 10**6
 
         h_bs = 30  # высота БС
         h_Rx = 2  # высота приемника
@@ -44,6 +44,8 @@ class BaseStation:
         L_db = 46.3 + 33.9 * math.log10(f_0) - 13.82 * math.log10(h_bs) - self.alpha(h_Rx, f_0) + (
                     44.9 - 6.55 * math.log10(h_Rx)) * math.log10(d/1000) + S  # bcghfdbnm d / 1000 переводим в км
         L_db += numpy.random.normal(0,1)  # добавляем нормальное распределние, потому что шумы меняются и по данной формуле вычисляется среднее
+
+        #print(f'L_db = {L_db}')
         # возможно alpha надо вызывать от чего-то другого... у меня написано R_0
         L = 10 ** (L_db / 10)  # переходим от Дб к нормальным
 
@@ -55,7 +57,7 @@ class BaseStation:
 
     def station_work_model(self, k: int, del_f: float, lam: float) -> int:  # первый вариант работы БС
         # slot = 0.5 время одного слота
-        V_n = 2**13  # количество пакетов, поступающих за раз
+        V_n = 8000  # количество пакетов, поступающих за раз
 
         P = [0] * self.abonents  # количество паректов. которые получает каждый буфер в каждом слоте
         for i in range(self.abonents):
@@ -65,7 +67,8 @@ class BaseStation:
             for j in range(k):
                 P[i][j] = numpy.random.geometric(1 / (lam*self.tau + 1))-1
             #P[i] = numpy.random.geometric(1 / (lam*self.tau + 1), k)   # зависимость от lambda
-        #print(P)
+        if lam == 290:
+            print(P)
         D_n = [0] * self.abonents
         for i in range(self.abonents):
             D_n[i] = [0] * k
@@ -73,14 +76,18 @@ class BaseStation:
         for j in range(1, k):
             for i in range(self.abonents):
                 D_n[i][j] = D_n[i][j - 1] + P[i][j] * V_n #для всех добавляем данные каждый проход
-                if j == i % k:
+                #print(f'Абонент {i} получает {P[i][j] * V_n} информации в буфер')
+                if i == j % (self.abonents):
                     SNR = self.getSNR(self.d[i], del_f)  # вычисляем SNR для пользователя которому на этом слоте  БС должен передавать информацию
-                    print(f'SNR {SNR}')
-                    C = del_f * math.log2(1 + SNR)  # вычисляем скорость передачи
-                    print(f'Скорость передачи данных = {C}')
-                    V_n_k = C * self.tau  # вычисляем количество передаваемой информации
+                    #print(f'SNR {SNR}')
+                    C = del_f * math.log2(1 + SNR)  # вычисляем скорость передачи [бит/сек]
+                    #print(f'Скорость передачи данных = {C/8192} КБайт/сек')
+                    #print('-------------------')
+                    #print(f'Абонент {i} слот {j}')
+                    V_n_k = C * self.tau  # вычисляем количество передаваемой информации [бит/слот]                  
+                    #print(f'Есть в буфере {D_n[i][j]}: Отправялем {V_n_k}') #неправильно считаем в V_n_k!!!!!!!
                     D_n[i][j] -= V_n_k  # чисто теоретически тут может уйти значение в отрицательное!!!!!
-                    print(f'Есть в буффере {D_n[i][j]}: Отправялем {V_n_k}') #неправильно считаем в V_n_k!!!!!!!
+                    #print('-------------------')
                                         #вычитаем только у абонента, которому отправялем данные
                 if(D_n[i][j] < 0):
                     D_n[i][j] = 0
@@ -190,14 +197,15 @@ class BaseStation:
         return sum_D  # возвращаем общее количество данных в Буферах
 
 
-for i in [2, 4, 8, 16]:
-    bs = BaseStation(i, 10000., 0.18)
+step = 10
+for i in [1, 2, 4, 8]:
+    bs = BaseStation(i, 1000., 180000)
     #print(bs.d)
     D_sum = []
     lam_arr = []
-    for lam in range(50):
-        D_sum.append(bs.station_work_model(500, 0.18, lam*10))
-        lam_arr.append(lam*10)
+    for lam in range(0, 20):
+        D_sum.append(bs.station_work_model(10000, 180000, lam*step))
+        lam_arr.append(lam*step)
     plt.plot(lam_arr, D_sum)
 
 #тут должны быть легенда и подписи
