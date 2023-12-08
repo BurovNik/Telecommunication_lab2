@@ -96,7 +96,7 @@ class BaseStation:
             sum_D += D_n[i][k - 1]
         return sum_D  # возвращаем общее количество данных в Буферах
 
-    def station_work_model_optimized(self, k: int, del_f: float, lam: float) -> int:  # второй вариант работы БС
+    def station_work_model_optimized_0(self, k: int, del_f: float, lam: float) -> int:  # второй вариант работы БС
         # slot = 0.5 время одного слота
         V_n = 2**13  # количество пакетов, поступающих за раз
 
@@ -129,22 +129,24 @@ class BaseStation:
 
     def station_work_model_optimized(self, k: int, del_f: float, lam: float) -> int:  # КОПИЯ второй вариант работы БС
         # slot = 0.5 время одного слота
-        V_n = 2**13  # количество пакетов, поступающих за раз
+        V_n = 8000  # количество пакетов, поступающих за раз
 
-        P = [0] * self.abonents()
+        P = [0] * self.abonents
         for i in range(self.abonents):
             P[i] = numpy.random.geometric(1 / (lam*self.tau + 1), k)  # зависимость от lambda
-        print(P)
+        for i in range(self.abonents):
+            for j in range(k):
+                P[i][j] -= 1
+
+        #print(P)
         D_n = [0] * self.abonents
         for i in range(self.abonents):
             D_n[i] = [0] * k
 
         for j in range(1, k):
             for i in range(self.abonents):
-                SNR = 0
-                V_n_k = 0  # задаем исходящий сисгнал равный нулю, для всех, кроме того абонента, чей слот активный.
-
-                if j == i % k:  # плохо потому что для чуваков у которых нет данных мы их и не добавим а просто скипнем их
+                D_n[i][j] = D_n[i][j - 1]  + P[i][j] * V_n
+                if i == j % self.abonents:  # плохо потому что для чуваков у которых нет данных мы их и не добавим а просто скипнем их
                     tmp = i
                     if D_n[i][j] == 0:
                         D_n[i][j] = D_n[i][j - 1] + P[i][j] * V_n
@@ -155,7 +157,9 @@ class BaseStation:
                     SNR = self.getSNR(self.d[tmp],del_f)  # вычисляем SNR для пользователя которому на этом слоте  БС должен передавать информацию
                     C = del_f * math.log2(1 + SNR)  # вычисляем скорость передачи
                     V_n_k = C * self.tau  # вычисляем количество передаваемой информации
-                D_n[i][j] = D_n[i][j - 1]  + P[i][j] * V_n - V_n_k
+                    D_n[tmp][j] -= V_n_k
+                    if(D_n[tmp][j] < 0):
+                        D_n[tmp][j] = 0
 
         sum_D = 0
         for i in range(self.abonents):
@@ -206,11 +210,35 @@ for i in [1, 2, 4, 8]:
     for lam in range(0, 20):
         D_sum.append(bs.station_work_model(10000, 180000, lam*step))
         lam_arr.append(lam*step)
-    plt.plot(lam_arr, D_sum)
+    plt.plot(lam_arr, D_sum, label= f'Абонентов в системе {i}')
 
 #тут должны быть легенда и подписи
+plt.xlabel('Интесивность входного потока пакет/слот')
+plt.ylabel('Суммарное количество информации в буферах, бит')
+plt.legend(fontsize=12, loc='best')
 plt.grid()
 plt.show()
+
+new_bs = BaseStation(8, 1000., 180000)
+D_sum = []
+D_opt_sum = []
+D_sup_opt_sum = []
+lam_arr = []
+for lam in range(0, 20):
+    D_sum.append(new_bs.station_work_model(10000, 180000, lam*step))
+    D_opt_sum.append(new_bs.station_work_model_optimized(10000, 180000, lam*step))
+    #D_sup_opt_sum.append(new_bs.station_work_model_super_optimized(1000, 180000, lam*step))
+    lam_arr.append(lam*step)
+plt.plot(lam_arr, D_sum, label='Базовый алгоритм')
+plt.plot(lam_arr, D_opt_sum, label='Улучшенный алгоритм')
+#plt.plot(lam_arr, D_sup_otp_sum, label='Алгоритм по дальности')
+plt.xlabel('Интесивность входного потока пакет/слот')
+plt.ylabel('Суммарное количество информации в буферах, бит')
+plt.legend(fontsize=12, loc='best')
+plt.grid()
+plt.show()
+
+
 
 # print(bs.SNR)
 ## перебор по лямбда
